@@ -46,8 +46,12 @@ function App() {
   useEffect(() => {
     if (user) {
       localStorage.setItem('chat_user', JSON.stringify(user));
+      fetchUserThreads(user.id);
     } else {
       localStorage.removeItem('chat_user');
+      setThreads([]);
+      setCurrentThreadId(null);
+      setMessages([]);
     }
   }, [user]);
 
@@ -131,10 +135,6 @@ function App() {
 
       setUser(data);
       showAlert('success', `Welcome back, ${data.name}!`);
-      // Start a thread automatically if none exists
-      if (threads.length === 0) {
-        createThread(data.id);
-      }
     } catch (err) {
       showAlert('error', err.message);
     }
@@ -146,6 +146,8 @@ function App() {
     setCurrentThreadId(null);
     setMessages([]);
     setCurrentView('chat');
+    localStorage.removeItem('current_thread_id');
+    localStorage.removeItem('chat_threads');
     showAlert('success', 'Logged out successfully');
   };
 
@@ -172,7 +174,7 @@ function App() {
     }
   };
 
-  const createThread = async (userId = user?.id) => {
+  async function createThread(userId = user?.id) {
     if (!userId) return;
     try {
       const res = await fetch(`${API_BASE}/threads`, {
@@ -189,10 +191,34 @@ function App() {
 
       setThreads(prev => [data, ...prev]);
       setCurrentThreadId(data.id);
+      return data;
     } catch (err) {
       showAlert('error', err.message);
     }
-  };
+  }
+
+  async function fetchUserThreads(userId = user?.id) {
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}/threads`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to load threads');
+      setThreads(data);
+      if (data.length > 0) {
+        const savedThreadId = localStorage.getItem('current_thread_id');
+        const exists = data.some(t => t.id === savedThreadId);
+        if (exists) {
+          setCurrentThreadId(savedThreadId);
+        } else {
+          setCurrentThreadId(data[0].id);
+        }
+      } else {
+        await createThread(userId);
+      }
+    } catch (err) {
+      showAlert('error', err.message);
+    }
+  }
 
   const fetchMessages = async (threadId) => {
     try {
@@ -238,6 +264,7 @@ function App() {
 
       // Reload messages list from DB to get citations and exact message indices
       fetchMessages(currentThreadId);
+      fetchUserThreads(user.id);
     } catch (err) {
       showAlert('error', err.message);
     } finally {

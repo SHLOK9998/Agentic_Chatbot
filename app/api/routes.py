@@ -39,6 +39,7 @@ from app.services.memory import (
     build_memory_context,
     get_message_count,
     update_rolling_summary,
+    generate_thread_title,
 )
 
 router = APIRouter(prefix="/api", tags=["chatbot"])
@@ -210,6 +211,24 @@ async def create_thread(
     return thread
 
 
+@router.get("/users/{user_id}/threads", response_model=list[ThreadResponse])
+async def get_user_threads(
+    user_id: uuid.UUID,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Get all conversation threads for a specific user, ordered by updated_at desc."""
+    user = await db.users.find_one({"_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    cursor = db.threads.find({"user_id": user_id}).sort("updated_at", -1)
+    threads = []
+    async for thread in cursor:
+        thread["id"] = thread["_id"]
+        threads.append(thread)
+    return threads
+
+
 @router.get("/threads/{thread_id}/messages", response_model=list[MessageResponse])
 async def get_thread_messages(
     thread_id: uuid.UUID,
@@ -291,6 +310,14 @@ async def chat(
         "created_at": datetime.now(timezone.utc),
     }
     await db.messages.insert_one(user_msg)
+
+    if msg_count == 0:
+        await generate_thread_title(db, thread_id, request.message)
+    else:
+        await db.threads.update_one(
+            {"_id": thread_id},
+            {"$set": {"updated_at": datetime.now(timezone.utc)}}
+        )
 
     # ── 4. Build memory context ────────────────────────────────
     memory = await build_memory_context(db, thread_id)

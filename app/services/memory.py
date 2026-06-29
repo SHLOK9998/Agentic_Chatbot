@@ -185,3 +185,46 @@ async def build_memory_context(
         "recent_messages": recent_text,
         "summary": summary_text,
     }
+
+
+async def generate_thread_title(
+    db: AsyncIOMotorDatabase,
+    thread_id: uuid.UUID,
+    first_message: str,
+) -> str:
+    """
+    Generate a concise title (2-5 words) for a thread based on the first message
+    using the LLM, and update the thread's title in the database.
+    """
+    try:
+        llm = ChatGroq(
+            model=settings.GROQ_MODEL_NAME,
+            groq_api_key=settings.GROQ_API_KEY,
+            temperature=0.7,
+        )
+
+        prompt = f"""You are a conversation summarizer. Generate a very short, descriptive title (2 to 5 words) for a chat thread based on this first user message:
+"{first_message}"
+
+Do NOT use quotes, do NOT include the word "Title:", and do NOT use any punctuation. Avoid generic titles like "New Conversation" or "Chat session".
+Make sure the title is NOT exactly the first message itself.
+
+Descriptive title:"""
+
+        response = await llm.ainvoke(prompt)
+        title = response.content.strip().strip('"\'')
+        
+        # fallback checks
+        if not title or len(title) > 60:
+            title = first_message[:30] + "..." if len(first_message) > 30 else first_message
+    except Exception as e:
+        # Fallback to truncated message if LLM fails
+        print(f"Error generating thread title: {e}")
+        title = first_message[:30] + "..." if len(first_message) > 30 else first_message
+
+    await db.threads.update_one(
+        {"_id": thread_id},
+        {"$set": {"title": title, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return title
+

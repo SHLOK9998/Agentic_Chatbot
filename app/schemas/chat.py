@@ -78,6 +78,7 @@ class ThreadResponse(BaseModel):
     user_id: uuid.UUID
     title: str | None
     created_at: datetime
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
