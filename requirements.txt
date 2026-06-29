@@ -1,0 +1,30 @@
+# === Web Framework ===
+fastapi
+uvicorn[standard]
+
+# === LangChain + LangGraph ===
+langchain
+langchain-core
+langchain-community
+langchain-google-genai
+langchain-groq
+langgraph
+
+# === Database (MongoDB) ===
+motor
+pymongo
+
+# === Embeddings & Reranking ===
+cohere
+google-generativeai
+
+# === Document Processing ===
+pypdf
+python-docx
+openpyxl
+chardet
+
+# === Environment & Utilities ===
+python-dotenv
+pydantic-settings
+python-multipart
